@@ -1,10 +1,9 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
 import shap
-import matplotlib.pyplot as plt
+import plotly.express as px  
 
 st.set_page_config(page_title="信贷风险评分系统", page_icon="🏦", layout="wide")
 
@@ -63,19 +62,48 @@ with col2:
     st.markdown(f"### {icon} {level}")
     st.progress(float(prob))
     st.divider()
+    
     st.markdown("**关键影响因素分析**")
+    st.caption("🔴 红色=增加违约风险 🟢 绿色=降低违约风险")
+
+    feature_map = {
+        "RevolvingUtilizationOfUnsecuredLines": "信用卡额度使用率",
+        "age": "年龄",
+        "NumberOfTime30-59DaysPastDueNotWorse": "30-59天逾期次数",
+        "DebtRatio": "负债比率",
+        "MonthlyIncome": "月收入",
+        "NumberOfOpenCreditLinesAndLoans": "信用账户数量",
+        "NumberOfTimes90DaysLate": "90天以上逾期次数",
+        "NumberRealEstateLoansOrLines": "房产贷款数量",
+        "NumberOfTime60-89DaysPastDueNotWorse": "60-89天逾期次数",
+        "NumberOfDependents": "家庭人口数"
+    }
 
     shap_vals = explainer.shap_values(input_df)[0]
     features  = list(input_df.columns)
     top_idx   = np.argsort(np.abs(shap_vals))[-6:]
-    colors    = ["#E24B4A" if v > 0 else "#1D9E75" for v in shap_vals]
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.barh([features[i] for i in top_idx],
-            [shap_vals[i] for i in top_idx],
-            color=[colors[i] for i in top_idx])
-    ax.axvline(0, color="black", linewidth=0.8)
-    ax.set_title("红色=增加违约风险  绿色=降低违约风险")
-    ax.set_xlabel("SHAP Value")
-    plt.tight_layout()
-    st.pyplot(fig)
+    plot_df = pd.DataFrame({
+        "特征": [feature_map[features[i]] for i in top_idx],
+        "SHAP值": [shap_vals[i] for i in top_idx],
+        "影响方向": ["增加风险" if shap_vals[i] > 0 else "降低风险" for i in top_idx]
+    })
+
+    fig = px.bar(
+        plot_df, 
+        x="SHAP值", 
+        y="特征", 
+        orientation='h',
+        color="影响方向",
+        color_discrete_map={"增加风险": "#E24B4A", "降低风险": "#1D9E75"}
+    )
+    
+    fig.update_layout(
+        showlegend=False, 
+        margin=dict(l=0, r=0, t=0, b=0), 
+        height=300,
+        xaxis_title=None,
+        yaxis_title=None
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
